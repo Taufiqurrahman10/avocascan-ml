@@ -1,0 +1,8 @@
+              precision    recall  f1-score   support
+
+     alpukat       0.93      1.00      0.96        26
+ non_alpukat       1.00      0.92      0.96        26
+
+    accuracy                           0.96        52
+   macro avg       0.96      0.96      0.96        52
+weighted avg       0.96      0.96      0.96        52

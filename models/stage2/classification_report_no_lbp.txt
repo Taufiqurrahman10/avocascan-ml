@@ -1,0 +1,9 @@
+              precision    recall  f1-score   support
+
+       busuk       1.00      1.00      1.00        13
+      matang       0.92      0.79      0.85        14
+      mentah       0.81      0.93      0.87        14
+
+    accuracy                           0.90        41
+   macro avg       0.91      0.90      0.90        41
+weighted avg       0.91      0.90      0.90        41
