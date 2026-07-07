@@ -1,0 +1,10 @@
+{
+    "model_name": "Stage 2 Avocado Ripeness Classification Model",
+    "version": "1.0.0",
+    "framework": "PyTorch",
+    "pytorch_version": "2.4.0",
+    "input_size": [224, 224, 3],
+    "num_classes": 3,
+    "class_names": ["busuk", "matang", "mentah"],
+    "description": "Ripeness classification model utilizing hybrid visual and texture features."
+}

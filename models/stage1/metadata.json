@@ -1,0 +1,10 @@
+{
+    "model_name": "Stage 1 Avocado Validation Model",
+    "version": "1.0.0",
+    "framework": "PyTorch",
+    "pytorch_version": "2.4.0",
+    "input_size": [224, 224, 3],
+    "num_classes": 2,
+    "class_names": ["alpukat", "non_alpukat"],
+    "description": "Gatekeeper classification model to distinguish between avocado and non-avocado objects."
+}
