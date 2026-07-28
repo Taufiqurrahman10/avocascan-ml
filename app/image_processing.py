@@ -60,8 +60,16 @@ def _get_rembg_session():
     global _rembg_session
     if _rembg_session is None:
         try:
+            import onnxruntime as ort
             from rembg import new_session
-            _rembg_session = new_session("u2netp")
+
+            opts = ort.SessionOptions()
+            opts.intra_op_num_threads = 1
+            opts.inter_op_num_threads = 1
+            opts.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
+            opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_BASIC
+
+            _rembg_session = new_session("u2netp", providers=["CPUExecutionProvider"], sess_options=opts)
         except Exception as exc:
             logger.warning("Gagal membuat rembg session: %s", exc)
     return _rembg_session

@@ -30,8 +30,16 @@ COPY . .
 # Expose ports (Hugging Face Spaces default is 7860, standard API is 8000)
 EXPOSE 7860 8000
 
-# Create a non-root user and switch to it for security
+# Create a non-root user
 RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
+
+# Pre-download u2netp.onnx into appuser home folder during Docker build
+RUN mkdir -p /home/appuser/.u2net && \
+    apt-get update && apt-get install -y --no-install-recommends curl && \
+    curl -L -o /home/appuser/.u2net/u2netp.onnx https://github.com/danielgatis/rembg/releases/download/v0.0.0/u2netp.onnx && \
+    chown -R appuser:appuser /home/appuser/.u2net && \
+    rm -rf /var/lib/apt/lists/*
+
 USER appuser
 
 # Run FastAPI application using uvicorn
