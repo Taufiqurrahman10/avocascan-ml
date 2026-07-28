@@ -153,6 +153,9 @@ class PredictionService:
             t_rembg, t_prep1, t_s1, t_prep2, t_feat, t_s2, total_time
         )
 
+        import gc
+        gc.collect()
+
         return {
             "is_avocado": True,
             "stage1_prediction": s1_label,

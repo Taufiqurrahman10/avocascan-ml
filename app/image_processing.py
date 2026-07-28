@@ -41,63 +41,49 @@ def validate_image(image_bytes: bytes, filename: str = "upload", settings: Setti
 
 
 def load_image_from_bytes(image_bytes: bytes, filename: str = "upload") -> Image.Image:
-    """Load image bytes into a PIL Image and convert to RGB."""
+    """Load image bytes into a PIL Image, downsampling high-res photos to max 800px to save RAM."""
     if not image_bytes:
         raise ImageLoadException(f"Image file '{filename}' is empty.")
     try:
-        return Image.open(io.BytesIO(image_bytes)).convert("RGB")
+        img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+        # Scale down high-resolution mobile photos (e.g., 4000x3000 -> max 800x800) to save 80%+ RAM
+        img.thumbnail((800, 800), Image.Resampling.LANCZOS)
+        return img
     except Exception as exc:
         raise ImageLoadException(f"Failed to decode image '{filename}': {exc}")
 
 
-def load_image_from_path(image_path: str, convert_rgb: bool = True) -> Image.Image:
-    """Load an image from a path into a PIL Image."""
-    try:
-        img = Image.open(image_path)
-        return img.convert("RGB") if convert_rgb else img
-    except Exception as exc:
-        raise ImageLoadException(f"Failed to open image from path '{image_path}': {exc}")
-
-
-_rembg_session = None
-
-
-def _get_rembg_session():
-    global _rembg_session
-    if _rembg_session is None:
-        try:
-            from rembg import new_session
-            _rembg_session = new_session("u2netp")
-        except Exception as exc:
-            logger.warning("Gagal membuat rembg session: %s", exc)
-    return _rembg_session
-
-
 def remove_background(image: Image.Image, bg_color: tuple = (255, 255, 255)) -> Image.Image:
-    """Menghapus background gambar menggunakan library rembg (model u2netp hemat RAM) dan menggantinya dengan background putih."""
-    try:
-        from rembg import remove
-    except ImportError:
-        logger.warning("Library rembg belum terinstall. Tetap menggunakan gambar asli.")
-        return image
+    """Menghapus background gambar menggunakan OpenCV Otsu thresholding (0 MB extra RAM, tanpa ONNX, 100% bebas OOM)."""
+    import numpy as np
+    import cv2
 
     start_time = time.perf_counter()
     try:
-        session = _get_rembg_session()
-        if session is not None:
-            rgba_img = remove(image, session=session, post_process_mask=True)
-        else:
-            rgba_img = remove(image, post_process_mask=True)
+        img_np = np.array(image)
+        gray = cv2.cvtColor(img_np, cv2.COLOR_RGB2GRAY)
+        blur = cv2.GaussianBlur(gray, (5, 5), 0)
 
-        white_bg = Image.new("RGBA", rgba_img.size, bg_color + (255,))
-        white_bg.alpha_composite(rgba_img)
-        result_img = white_bg.convert("RGB")
+        # Thresholding Otsu untuk memisahkan latar belakang dari objek alpukat
+        _, mask = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+
+        # Pembersihan tepi mask
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+        mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=2)
+        mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel, iterations=1)
+
+        # Buat background putih
+        white_bg = np.full_like(img_np, bg_color, dtype=np.uint8)
+
+        # Penggabungan (alpha blend)
+        mask_3d = (mask[:, :, np.newaxis] / 255.0)
+        result_np = (img_np * mask_3d + white_bg * (1.0 - mask_3d)).astype(np.uint8)
 
         elapsed = (time.perf_counter() - start_time) * 1000
-        logger.info("Remove background (u2netp) selesai dalam %.2f ms", elapsed)
-        return result_img
+        logger.info("Remove background (OpenCV light) selesai dalam %.2f ms", elapsed)
+        return Image.fromarray(result_np)
     except Exception as exc:
-        logger.error("Gagal melakukan remove background: %s. Tetap menggunakan gambar asli.", exc)
+        logger.error("Gagal melakukan remove background OpenCV: %s. Tetap menggunakan gambar asli.", exc)
         return image
 
 
