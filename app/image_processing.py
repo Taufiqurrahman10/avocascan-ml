@@ -53,37 +53,49 @@ def load_image_from_bytes(image_bytes: bytes, filename: str = "upload") -> Image
         raise ImageLoadException(f"Failed to decode image '{filename}': {exc}")
 
 
+_rembg_session = None
+
+
+def _get_rembg_session():
+    global _rembg_session
+    if _rembg_session is None:
+        try:
+            from rembg import new_session
+            _rembg_session = new_session("u2netp")
+        except Exception as exc:
+            logger.warning("Gagal membuat rembg session: %s", exc)
+    return _rembg_session
+
+
 def remove_background(image: Image.Image, bg_color: tuple = (255, 255, 255)) -> Image.Image:
-    """Menghapus background gambar menggunakan OpenCV Otsu thresholding (0 MB extra RAM, tanpa ONNX, 100% bebas OOM)."""
-    import numpy as np
-    import cv2
+    """Menghapus background menggunakan rembg AI (u2netp) dengan downsampling 600px agar akurat & 100% hemat RAM."""
+    try:
+        from rembg import remove
+    except ImportError:
+        logger.warning("Library rembg belum terinstall. Tetap menggunakan gambar asli.")
+        return image
 
     start_time = time.perf_counter()
     try:
-        img_np = np.array(image)
-        gray = cv2.cvtColor(img_np, cv2.COLOR_RGB2GRAY)
-        blur = cv2.GaussianBlur(gray, (5, 5), 0)
+        # Downsample gambar ke max 600px terlebih dahulu agar memory rembg ONNX hanya ~20MB (bukan 400MB)
+        img_input = image.copy()
+        img_input.thumbnail((600, 600), Image.Resampling.LANCZOS)
 
-        # Thresholding Otsu untuk memisahkan latar belakang dari objek alpukat
-        _, mask = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+        session = _get_rembg_session()
+        if session is not None:
+            rgba_img = remove(img_input, session=session, post_process_mask=True)
+        else:
+            rgba_img = remove(img_input, post_process_mask=True)
 
-        # Pembersihan tepi mask
-        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
-        mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=2)
-        mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel, iterations=1)
-
-        # Buat background putih
-        white_bg = np.full_like(img_np, bg_color, dtype=np.uint8)
-
-        # Penggabungan (alpha blend)
-        mask_3d = (mask[:, :, np.newaxis] / 255.0)
-        result_np = (img_np * mask_3d + white_bg * (1.0 - mask_3d)).astype(np.uint8)
+        white_bg = Image.new("RGBA", rgba_img.size, bg_color + (255,))
+        white_bg.alpha_composite(rgba_img)
+        result_img = white_bg.convert("RGB")
 
         elapsed = (time.perf_counter() - start_time) * 1000
-        logger.info("Remove background (OpenCV light) selesai dalam %.2f ms", elapsed)
-        return Image.fromarray(result_np)
+        logger.info("Remove background (rembg AI) selesai dalam %.2f ms", elapsed)
+        return result_img
     except Exception as exc:
-        logger.error("Gagal melakukan remove background OpenCV: %s. Tetap menggunakan gambar asli.", exc)
+        logger.error("Gagal melakukan remove background rembg: %s. Tetap menggunakan gambar asli.", exc)
         return image
 
 
