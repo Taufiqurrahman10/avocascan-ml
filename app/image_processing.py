@@ -53,58 +53,10 @@ def load_image_from_bytes(image_bytes: bytes, filename: str = "upload") -> Image
         raise ImageLoadException(f"Failed to decode image '{filename}': {exc}")
 
 
-_rembg_session = None
-
-
-def _get_rembg_session():
-    global _rembg_session
-    if _rembg_session is None:
-        try:
-            import onnxruntime as ort
-            from rembg import new_session
-
-            opts = ort.SessionOptions()
-            opts.intra_op_num_threads = 1
-            opts.inter_op_num_threads = 1
-            opts.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
-            opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_BASIC
-
-            _rembg_session = new_session("u2netp", providers=["CPUExecutionProvider"], sess_options=opts)
-        except Exception as exc:
-            logger.warning("Gagal membuat rembg session: %s", exc)
-    return _rembg_session
-
-
 def remove_background(image: Image.Image, bg_color: tuple = (255, 255, 255)) -> Image.Image:
-    """Menghapus background menggunakan rembg AI (u2netp) dengan downsampling 600px agar akurat & 100% hemat RAM."""
-    try:
-        from rembg import remove
-    except ImportError:
-        logger.warning("Library rembg belum terinstall. Tetap menggunakan gambar asli.")
-        return image
-
-    start_time = time.perf_counter()
-    try:
-        # Downsample gambar ke max 600px terlebih dahulu agar memory rembg ONNX hanya ~20MB (bukan 400MB)
-        img_input = image.copy()
-        img_input.thumbnail((600, 600), Image.Resampling.LANCZOS)
-
-        session = _get_rembg_session()
-        if session is not None:
-            rgba_img = remove(img_input, session=session, post_process_mask=True)
-        else:
-            rgba_img = remove(img_input, post_process_mask=True)
-
-        white_bg = Image.new("RGBA", rgba_img.size, bg_color + (255,))
-        white_bg.alpha_composite(rgba_img)
-        result_img = white_bg.convert("RGB")
-
-        elapsed = (time.perf_counter() - start_time) * 1000
-        logger.info("Remove background (rembg AI) selesai dalam %.2f ms", elapsed)
-        return result_img
-    except Exception as exc:
-        logger.error("Gagal melakukan remove background rembg: %s. Tetap menggunakan gambar asli.", exc)
-        return image
+    """Mengembalikan gambar asli tanpa modifikasi (rembg dinonaktifkan untuk menghemat RAM server)."""
+    logger.info("Remove background dilewati (mode hemat RAM).")
+    return image
 
 
 def build_stage1_transform(settings: Settings | None = None) -> transforms.Compose:
