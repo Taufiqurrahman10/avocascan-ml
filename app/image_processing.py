@@ -59,8 +59,22 @@ def load_image_from_path(image_path: str, convert_rgb: bool = True) -> Image.Ima
         raise ImageLoadException(f"Failed to open image from path '{image_path}': {exc}")
 
 
+_rembg_session = None
+
+
+def _get_rembg_session():
+    global _rembg_session
+    if _rembg_session is None:
+        try:
+            from rembg import new_session
+            _rembg_session = new_session("u2netp")
+        except Exception as exc:
+            logger.warning("Gagal membuat rembg session: %s", exc)
+    return _rembg_session
+
+
 def remove_background(image: Image.Image, bg_color: tuple = (255, 255, 255)) -> Image.Image:
-    """Menghapus background gambar menggunakan library rembg dan menggantinya dengan background putih serapi mungkin."""
+    """Menghapus background gambar menggunakan library rembg (model u2netp hemat RAM) dan menggantinya dengan background putih."""
     try:
         from rembg import remove
     except ImportError:
@@ -69,21 +83,18 @@ def remove_background(image: Image.Image, bg_color: tuple = (255, 255, 255)) -> 
 
     start_time = time.perf_counter()
     try:
-        # 1. Hapus background gambar (hasilnya RGBA transparan)
-        # post_process_mask=True merapikan tepi objek agar potongannya halus dan rapi
-        rgba_img = remove(image, post_process_mask=True)
+        session = _get_rembg_session()
+        if session is not None:
+            rgba_img = remove(image, session=session, post_process_mask=True)
+        else:
+            rgba_img = remove(image, post_process_mask=True)
 
-        # 2. Buat kanvas background putih baru sesuai ukuran gambar asli
         white_bg = Image.new("RGBA", rgba_img.size, bg_color + (255,))
-
-        # 3. Gabungkan objek alpukat ke atas background putih
         white_bg.alpha_composite(rgba_img)
-
-        # 4. Ubah kembali ke RGB (3 channel) agar bisa diproses oleh model
         result_img = white_bg.convert("RGB")
 
         elapsed = (time.perf_counter() - start_time) * 1000
-        logger.info("Remove background selesai dalam %.2f ms", elapsed)
+        logger.info("Remove background (u2netp) selesai dalam %.2f ms", elapsed)
         return result_img
     except Exception as exc:
         logger.error("Gagal melakukan remove background: %s. Tetap menggunakan gambar asli.", exc)
