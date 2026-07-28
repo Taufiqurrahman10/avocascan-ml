@@ -59,6 +59,37 @@ def load_image_from_path(image_path: str, convert_rgb: bool = True) -> Image.Ima
         raise ImageLoadException(f"Failed to open image from path '{image_path}': {exc}")
 
 
+def remove_background(image: Image.Image, bg_color: tuple = (255, 255, 255)) -> Image.Image:
+    """Menghapus background gambar menggunakan library rembg dan menggantinya dengan background putih serapi mungkin."""
+    try:
+        from rembg import remove
+    except ImportError:
+        logger.warning("Library rembg belum terinstall. Tetap menggunakan gambar asli.")
+        return image
+
+    start_time = time.perf_counter()
+    try:
+        # 1. Hapus background gambar (hasilnya RGBA transparan)
+        # post_process_mask=True merapikan tepi objek agar potongannya halus dan rapi
+        rgba_img = remove(image, post_process_mask=True)
+
+        # 2. Buat kanvas background putih baru sesuai ukuran gambar asli
+        white_bg = Image.new("RGBA", rgba_img.size, bg_color + (255,))
+
+        # 3. Gabungkan objek alpukat ke atas background putih
+        white_bg.alpha_composite(rgba_img)
+
+        # 4. Ubah kembali ke RGB (3 channel) agar bisa diproses oleh model
+        result_img = white_bg.convert("RGB")
+
+        elapsed = (time.perf_counter() - start_time) * 1000
+        logger.info("Remove background selesai dalam %.2f ms", elapsed)
+        return result_img
+    except Exception as exc:
+        logger.error("Gagal melakukan remove background: %s. Tetap menggunakan gambar asli.", exc)
+        return image
+
+
 def build_stage1_transform(settings: Settings | None = None) -> transforms.Compose:
     """Build the Stage 1 transform pipeline."""
     cfg = settings or get_settings()

@@ -15,6 +15,7 @@ from app.feature_extractor import extract_features
 from app.image_processing import (
     validate_image,
     load_image_from_bytes,
+    remove_background,
     apply_stage1_transform,
     apply_stage2_base_transform,
     apply_stage2_tensor_transform,
@@ -57,7 +58,12 @@ class PredictionService:
         # 3. Load image
         pil_image = load_image_from_bytes(image_bytes, filename)
 
-        # 4. Stage 1 Preprocessing
+        # 4. Remove background agar hasil deteksi akurat & sesuai dataset WBG
+        t_rembg_start = time.perf_counter()
+        pil_image = remove_background(pil_image)
+        t_rembg = (time.perf_counter() - t_rembg_start) * 1000
+
+        # 5. Stage 1 Preprocessing
         t_prep1_start = time.perf_counter()
         try:
             image_tensor_s1 = apply_stage1_transform(pil_image, self.settings)
@@ -65,7 +71,7 @@ class PredictionService:
             raise ImagePreprocessingException(f"Stage 1 preprocessing failed: {exc}")
         t_prep1 = (time.perf_counter() - t_prep1_start) * 1000
 
-        # 5. Stage 1 Inference
+        # 6. Stage 1 Inference
         t_s1_start = time.perf_counter()
         try:
             s1_model = self.model_loader.get_stage1_model()
@@ -81,13 +87,13 @@ class PredictionService:
         s1_label = s1_class_names[s1_pred_idx]
         s1_conf = s1_probs[0, s1_pred_idx].item()
 
-        # 6. Decision Logic (Stage 1 == "alpukat")
+        # 7. Decision Logic (Stage 1 == "alpukat")
         if s1_label != "alpukat":
             total_time = (time.perf_counter() - total_start) * 1000
             logger.info(
                 "Predict non-avocado (stage1_prediction=%s, stage1_confidence=%.4f). "
-                "Time breakdown: prep_s1=%.2f ms, stage1=%.2f ms. Total inference time: %.2f ms",
-                s1_label, s1_conf, t_prep1, t_s1, total_time
+                "Time breakdown: rembg=%.2f ms, prep_s1=%.2f ms, stage1=%.2f ms. Total inference time: %.2f ms",
+                s1_label, s1_conf, t_rembg, t_prep1, t_s1, total_time
             )
             return {
                 "is_avocado": False,
@@ -141,10 +147,10 @@ class PredictionService:
         logger.info(
             "Predict avocado (stage1_prediction=%s, stage1_confidence=%.4f, "
             "stage2_prediction=%s, stage2_confidence=%.4f). "
-            "Time breakdown: prep_s1=%.2f ms, stage1=%.2f ms, prep_s2=%.2f ms, "
+            "Time breakdown: rembg=%.2f ms, prep_s1=%.2f ms, stage1=%.2f ms, prep_s2=%.2f ms, "
             "feat=%.2f ms, stage2=%.2f ms. Total inference time: %.2f ms",
             s1_label, s1_conf, s2_label, s2_conf,
-            t_prep1, t_s1, t_prep2, t_feat, t_s2, total_time
+            t_rembg, t_prep1, t_s1, t_prep2, t_feat, t_s2, total_time
         )
 
         return {

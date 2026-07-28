@@ -122,9 +122,11 @@ class ModelLoader:
 
         start_time = time.perf_counter()
         try:
-            state_dict = torch.load(model_path, map_location="cpu", weights_only=False)
-            model = HybridModel(num_manual_features=196, num_classes=3)
-            model.load_state_dict(state_dict)
+            checkpoint = torch.load(model_path, map_location="cpu", weights_only=False)
+            num_manual_features = checkpoint.get("num_manual_features", 196)
+            num_classes = checkpoint.get("num_classes", 3)
+            model = HybridModel(num_manual_features=num_manual_features, num_classes=num_classes)
+            model.load_state_dict(checkpoint["model_state_dict"])
             model.eval()
             self._stage2_model = model
         except Exception as exc:
