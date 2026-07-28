@@ -101,6 +101,7 @@ class PredictionService:
                 "stage1_confidence": s1_conf,
                 "stage2_prediction": None,
                 "stage2_confidence": None,
+                "stage2_probabilities": None,
             }
 
         # 7. Stage 2 Preprocessing & Feature Extraction
@@ -141,6 +142,10 @@ class PredictionService:
         s2_pred_idx = torch.argmax(s2_probs, dim=1).item()
         s2_label = s2_class_names[s2_pred_idx]
         s2_conf = s2_probs[0, s2_pred_idx].item()
+        s2_probabilities = {
+            name: round(s2_probs[0, idx].item() * 100, 1)
+            for idx, name in enumerate(s2_class_names)
+        }
 
         # 9. Log performance timings
         total_time = (time.perf_counter() - total_start) * 1000
@@ -162,5 +167,6 @@ class PredictionService:
             "stage1_confidence": s1_conf,
             "stage2_prediction": s2_label,
             "stage2_confidence": s2_conf,
+            "stage2_probabilities": s2_probabilities,
         }
 
