@@ -41,22 +41,53 @@ def validate_image(image_bytes: bytes, filename: str = "upload", settings: Setti
 
 
 def load_image_from_bytes(image_bytes: bytes, filename: str = "upload") -> Image.Image:
-    """Load image bytes into a PIL Image, downsampling high-res photos to max 800px to save RAM."""
+    """Load image bytes into a PIL Image and convert to RGB."""
     if not image_bytes:
         raise ImageLoadException(f"Image file '{filename}' is empty.")
     try:
-        img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-        # Scale down high-resolution mobile photos (e.g., 4000x3000 -> max 800x800) to save 80%+ RAM
-        img.thumbnail((800, 800), Image.Resampling.LANCZOS)
-        return img
+        return Image.open(io.BytesIO(image_bytes)).convert("RGB")
     except Exception as exc:
         raise ImageLoadException(f"Failed to decode image '{filename}': {exc}")
 
 
+def load_image_from_path(image_path: str, convert_rgb: bool = True) -> Image.Image:
+    """Load an image from a path into a PIL Image."""
+    try:
+        img = Image.open(image_path)
+        return img.convert("RGB") if convert_rgb else img
+    except Exception as exc:
+        raise ImageLoadException(f"Failed to open image from path '{image_path}': {exc}")
+
+
 def remove_background(image: Image.Image, bg_color: tuple = (255, 255, 255)) -> Image.Image:
-    """Mengembalikan gambar asli tanpa modifikasi (rembg dinonaktifkan untuk menghemat RAM server)."""
-    logger.info("Remove background dilewati (mode hemat RAM).")
-    return image
+    """Menghapus background gambar menggunakan library rembg dan menggantinya dengan background putih serapi mungkin."""
+    try:
+        from rembg import remove
+    except ImportError:
+        logger.warning("Library rembg belum terinstall. Tetap menggunakan gambar asli.")
+        return image
+
+    start_time = time.perf_counter()
+    try:
+        # 1. Hapus background gambar (hasilnya RGBA transparan)
+        # post_process_mask=True merapikan tepi objek agar potongannya halus dan rapi
+        rgba_img = remove(image, post_process_mask=True)
+
+        # 2. Buat kanvas background putih baru sesuai ukuran gambar asli
+        white_bg = Image.new("RGBA", rgba_img.size, bg_color + (255,))
+
+        # 3. Gabungkan objek alpukat ke atas background putih
+        white_bg.alpha_composite(rgba_img)
+
+        # 4. Ubah kembali ke RGB (3 channel) agar bisa diproses oleh model
+        result_img = white_bg.convert("RGB")
+
+        elapsed = (time.perf_counter() - start_time) * 1000
+        logger.info("Remove background selesai dalam %.2f ms", elapsed)
+        return result_img
+    except Exception as exc:
+        logger.error("Gagal melakukan remove background: %s. Tetap menggunakan gambar asli.", exc)
+        return image
 
 
 def build_stage1_transform(settings: Settings | None = None) -> transforms.Compose:
