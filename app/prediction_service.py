@@ -17,6 +17,7 @@ from app.image_processing import (
     load_image_from_bytes,
     remove_background,
     apply_stage1_transform,
+    standardize_stage2_object_scale,
     apply_stage2_base_transform,
     apply_stage2_tensor_transform,
 )
@@ -105,10 +106,12 @@ class PredictionService:
             }
 
         # 7. Stage 2 Preprocessing & Feature Extraction
-        # Base transform (Resize + CenterCrop)
+        # Samakan kanvas, posisi, dan okupansi objek dengan dataset pelatihan,
+        # lalu jalankan base transform (Resize + CenterCrop).
         t_prep2_start = time.perf_counter()
         try:
-            pil_cropped = apply_stage2_base_transform(pil_image, self.settings)
+            pil_stage2 = standardize_stage2_object_scale(pil_image, self.settings)
+            pil_cropped = apply_stage2_base_transform(pil_stage2, self.settings)
         except Exception as exc:
             raise ImagePreprocessingException(f"Stage 2 base transform failed: {exc}")
         t_prep2_base = (time.perf_counter() - t_prep2_start) * 1000
@@ -169,4 +172,3 @@ class PredictionService:
             "stage2_confidence": s2_conf,
             "stage2_probabilities": s2_probabilities,
         }
-

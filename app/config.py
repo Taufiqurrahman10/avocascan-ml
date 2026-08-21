@@ -29,6 +29,13 @@ class Settings(BaseSettings):
     stage2_resize_width: int = 256
     stage2_crop_size: int = 224
 
+    # Standardisasi objek Stage 2 (identik dengan dataset pelatihan)
+    stage2_canvas_width: int = 1200
+    stage2_canvas_height: int = 1600
+    stage2_object_occupancy: float = 0.80
+    stage2_white_threshold: int = 245
+    stage2_min_component_ratio: float = 0.002
+
     # --- Normalization Parameters (ImageNet, digunakan oleh kedua stage) ---
     normalize_mean: list[float] = [0.485, 0.456, 0.406]
     normalize_std: list[float] = [0.229, 0.224, 0.225]
